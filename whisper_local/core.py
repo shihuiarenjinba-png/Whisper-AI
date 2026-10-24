@@ -14,7 +14,7 @@ import threading
 import time
 from typing import Callable
 
-SUPPORTED_EXTENSIONS = frozenset({".wav", ".mp3", ".m4a", ".flac", ".ogg", ".mp4", ".mkv", ".webm", ".aac", ".wma"})
+SUPPORTED_EXTENSIONS = frozenset({".wav", ".mp3", ".m4a", ".flac", ".ogg", ".mp4", ".mkv", ".webm", ".aac", ".wma", ".opus", ".mov", ".avi", ".m4v"})
 LANGUAGES = ("auto", "ja", "en")
 
 
