@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 import tempfile
 import threading
 import unittest
@@ -29,10 +30,10 @@ class CoreTests(unittest.TestCase):
 
     def test_validation_and_language(self):
         c, f, audio, model, dest = validate(self.job)
-        self.assertEqual(Path(c), self.cli)
-        self.assertEqual(Path(f), self.ffmpeg)
-        self.assertEqual(audio, self.audio)
-        self.assertEqual(dest, self.out)
+        self.assertTrue(os.path.samefile(c, self.cli))
+        self.assertTrue(os.path.samefile(f, self.ffmpeg))
+        self.assertTrue(os.path.samefile(audio, self.audio))
+        self.assertTrue(os.path.samefile(dest, self.out))
         with self.assertRaises(TranscriptionError):
             validate(TranscriptionJob(self.audio, self.model, str(self.cli), str(self.ffmpeg), self.out, "zz"))
 
@@ -71,8 +72,8 @@ class CoreTests(unittest.TestCase):
             self.assertIn("こんにちは", srt.read_text(encoding="utf-8"))
             self.assertEqual(stages, ["converting", "transcribing", "saving"])
             self.assertEqual(run.call_count, 2)
-            self.assertEqual(run.call_args_list[0].args[0][0], str(self.ffmpeg))
-            self.assertEqual(run.call_args_list[1].args[0][0], str(self.cli))
+            self.assertTrue(os.path.samefile(run.call_args_list[0].args[0][0], self.ffmpeg))
+            self.assertTrue(os.path.samefile(run.call_args_list[1].args[0][0], self.cli))
             self.assertEqual(run.call_args_list[1].args[0][-2], "-of")
             txt2, srt2 = transcribe(self.job)
             self.assertNotEqual(txt, txt2)
