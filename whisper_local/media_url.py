@@ -16,7 +16,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from .core import (
     OperationCancelled, TranscriptionError, TranscriptionJob,
-    SUPPORTED_EXTENSIONS, _resolve_program, run_process, transcribe,
+    SUPPORTED_EXTENSIONS, _resolve_program, is_english_only_model, run_process, transcribe,
 )
 
 _VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
@@ -61,6 +61,30 @@ class YouTubeJob:
     permission_confirmed: bool = False
 
 
+def validate_youtube_job(job: YouTubeJob) -> tuple[str, str]:
+    """Validate an opt-in YouTube job without starting network access."""
+    if not job.permission_confirmed:
+        raise TranscriptionError("ダウンロード権限と利用規約の確認が必要です / Confirm permission and service terms first")
+    url = normalize_youtube_url(job.url)
+    output = job.output_directory.expanduser().resolve()
+    if not output.is_dir():
+        raise TranscriptionError("保存先フォルダが見つかりません / Output directory not found")
+    if job.language not in ("auto", "ja", "en"):
+        raise TranscriptionError("未対応の言語設定 / Unsupported language")
+    model = job.model.expanduser().resolve()
+    if not model.is_file() or model.suffix.lower() != ".bin":
+        raise TranscriptionError("GGMLモデル(.bin)を指定してください / Select a GGML model")
+    if job.language == "ja" and is_english_only_model(model):
+        raise TranscriptionError(
+            "日本語には多言語モデルを指定してください（.en.bin は英語専用です） / "
+            "Select a multilingual model for Japanese (.en.bin is English-only)"
+        )
+    _resolve_program(job.whisper_cli, "whisper-cli")
+    _resolve_program(job.ffmpeg, "ffmpeg")
+    downloader = _resolve_program(job.yt_dlp, "yt-dlp")
+    return url, downloader
+
+
 def transcribe_youtube(
     job: YouTubeJob,
     cancel: threading.Event | None = None,
@@ -72,24 +96,13 @@ def transcribe_youtube(
     be inaccurate; avoid use with untrusted, very large media. Downloaded media
     is held only in a temporary folder and removed on cancellation/error.
     """
-    if not job.permission_confirmed:
-        raise TranscriptionError("ダウンロード権限と利用規約の確認が必要です / Confirm permission and service terms first")
-    url = normalize_youtube_url(job.url)
     cancel = cancel or threading.Event()
     on_stage = on_stage or (lambda _stage: None)
     if cancel.is_set():
         raise OperationCancelled("キャンセルしました / Cancelled")
-    # Check local prerequisites before attempting any online access.
+    # Check every local prerequisite before attempting any online access.
+    url, downloader = validate_youtube_job(job)
     output = job.output_directory.expanduser().resolve()
-    if not output.is_dir():
-        raise TranscriptionError("保存先フォルダが見つかりません / Output directory not found")
-    if job.language not in ("auto", "ja", "en"):
-        raise TranscriptionError("未対応の言語設定 / Unsupported language")
-    if not job.model.is_file() or job.model.suffix.lower() != ".bin":
-        raise TranscriptionError("GGMLモデル(.bin)を指定してください / Select a GGML model")
-    _resolve_program(job.whisper_cli, "whisper-cli")
-    _resolve_program(job.ffmpeg, "ffmpeg")
-    downloader = _resolve_program(job.yt_dlp, "yt-dlp")
 
     with tempfile.TemporaryDirectory(prefix="whisper_youtube_", dir=output) as folder:
         temp = Path(folder)

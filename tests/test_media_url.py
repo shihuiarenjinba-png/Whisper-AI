@@ -5,7 +5,10 @@ import threading
 import unittest
 from unittest.mock import patch
 
-from whisper_local import TranscriptionError, YouTubeJob, normalize_youtube_url, transcribe_youtube
+from whisper_local import (
+    TranscriptionError, YouTubeJob, normalize_youtube_url,
+    transcribe_youtube, validate_youtube_job,
+)
 
 
 class YouTubeImportTests(unittest.TestCase):
@@ -67,6 +70,18 @@ class YouTubeImportTests(unittest.TestCase):
             with self.assertRaisesRegex(TranscriptionError, "yt-dlp"):
                 transcribe_youtube(job)
             runner.assert_not_called()
+
+    def test_preflight_validation_has_no_network_side_effect(self):
+        url, downloader = validate_youtube_job(self.job)
+        self.assertEqual(url, "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+        self.assertTrue(Path(downloader).is_file())
+
+    def test_english_only_model_is_rejected_for_japanese(self):
+        english_model = Path(self.temp.name) / "ggml-base.en.bin"
+        english_model.write_bytes(b"test model")
+        job = YouTubeJob(**{**self.job.__dict__, "model": english_model, "language": "ja"})
+        with self.assertRaisesRegex(TranscriptionError, "multilingual"):
+            validate_youtube_job(job)
 
     def test_download_and_local_transcription_pipeline(self):
         stages = []

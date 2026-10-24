@@ -3,7 +3,7 @@
 > **Status: development / QA only. Not a ready-for-sale release.**
 > The GitHub repository is `Whisper-AI`, but this tool is not an official OpenAI/Whisper product.
 
-A small bilingual Windows desktop UI for making **TXT transcripts** and **SRT subtitles** from local audio/video files. It runs `whisper.cpp` on **your own PC**, without OpenAI APIs, external cloud accounts, subscriptions, or per-minute recognition charges. No audio, files, prompts, or usage data are transmitted by this app.
+A small bilingual Windows desktop UI for making **TXT transcripts** and **SRT subtitles** from local audio/video files or an optional, authorized single-video YouTube URL. Recognition runs through `whisper.cpp` on **your own PC**, without OpenAI APIs, external cloud accounts, subscriptions, or per-minute recognition charges. The app does not upload audio, transcripts, prompts, telemetry, or usage data.
 
 ## What works in this MVP
 
@@ -12,6 +12,8 @@ A small bilingual Windows desktop UI for making **TXT transcripts** and **SRT su
 - FFmpeg converts selected media to 16 kHz, mono, signed 16-bit PCM WAV.
 - An existing, user-supplied `whisper-cli` executable and compatible multilingual GGML `.bin` model transcribe the audio.
 - Local TXT and SRT output; no output overwrite; cancellation; clear recoverable errors.
+- Setup preflight, beginner guidance, scrollable small-screen layout, and a transcript preview.
+- Optional YouTube import using a user-supplied `yt-dlp`, only after an explicit rights/terms confirmation. No cookie, login, or DRM bypass.
 - No Ollama or external AI API required. Optional Ollama summaries are a *separate future feature*, not claimed to work in this version.
 
 ### Prerequisites (not bundled)
@@ -20,6 +22,7 @@ A small bilingual Windows desktop UI for making **TXT transcripts** and **SRT su
 2. A compatible `whisper-cli.exe` built from [whisper.cpp](https://github.com/ggml-org/whisper.cpp) for your hardware. If it is on `PATH`, the app can detect it automatically; otherwise browse to the `.exe`.
 3. A compatible GGML **multilingual** model such as `ggml-base.bin` or `ggml-small.bin`, obtained separately from a trusted source. **Do not use** an English-only `.en.bin` model for Japanese. The model is selected by the user.
 4. `ffmpeg.exe` from a trustworthy distributable build. If present on `PATH`, it is detected automatically; otherwise browse to it. Review FFmpeg licensing before commercial redistribution.
+5. Optional: `yt-dlp.exe` from its official project for authorized YouTube URL input. Review its release notices and the applicable YouTube terms before use or redistribution.
 
 ## Run
 
@@ -27,13 +30,16 @@ A small bilingual Windows desktop UI for making **TXT transcripts** and **SRT su
 py -3.12 app.py
 ```
 
-1. Select a local audio or video file.
+1. Select a local audio/video file, or select YouTube URL for a single video you are authorized to obtain and transcribe.
 2. Select a multilingual GGML Whisper model (`.bin`).
 3. Select `whisper-cli.exe` and `ffmpeg.exe`, then an existing output directory.
 4. Choose `Auto`, `ja`, or `en` for speech recognition.
-5. Click **Start transcription / 文字起こし開始**. TXT and SRT are saved in the selected directory with a unique basename.
+5. Click **Check setup / 設定を確認**. This validates local paths without starting transcription or network access.
+6. Click **Start transcription / 文字起こし開始**. TXT and SRT are saved in the selected directory with a unique basename.
 
-The app works offline **after prerequisites have been installed**. It does **not** automatically download runtimes or models or call an AI API. Transcription may take a long time on slower PCs. The progress indicator shows the current stage, not a fabricated percentage.
+For YouTube input, also select `yt-dlp.exe` and confirm both the relevant rights and applicable service terms. The confirmation checkbox does not grant rights or override YouTube terms. The current guardrails accept only HTTPS single-video watch/Shorts/live URLs, reject arbitrary hosts and playlists, and request a maximum duration of 20 minutes and maximum download size of 200 MiB. If import is not allowed or fails, use a legitimately obtained local file.
+
+Local-file transcription works offline **after prerequisites have been installed**. YouTube import is the only application feature that intentionally starts network access, via the user-selected `yt-dlp`, after explicit user action. The app does **not** automatically download runtimes or models or call an AI API. Transcription may take a long time on slower PCs. The progress indicator shows the current stage, not a fabricated percentage.
 
 ## Tests
 
@@ -45,12 +51,14 @@ These tests use **fake runtimes** to verify command construction, cancellation, 
 
 ## Windows QA artifact
 
-The workflow `.github/workflows/windows-qa.yml` runs unit tests on Windows and packages `LocalSpeechStudio_QA_UNSIGNED.exe` with PyInstaller. It is an **unsigned QA-only EXE**, **not an MSIX**, not tested against a real model, and not a certified Microsoft Store release. A real signed MSIX requires additional validation of app identity/Publisher, signing, installation/uninstallation, licensing, screenshots, and WACK/Store checks.
+The workflow `.github/workflows/windows-qa.yml` runs unit tests on Windows and packages `LocalSpeechStudio_QA_UNSIGNED.exe` with PyInstaller. The artifact includes the README, notices, and a SHA-256 file. It is an **unsigned QA-only EXE**, **not an MSIX**, and not a certified Microsoft Store release. A real signed MSIX requires additional validation of app identity/Publisher, signing, installation/uninstallation, licensing, screenshots, and WACK/Store checks.
 
 ## Security and privacy
 
 - Child processes are launched as argument arrays without a shell, never by interpolating audio filenames into shell commands.
-- Files stay on the local PC. No network code, telemetry, model downloader, or automatic service discovery is included.
+- Local-file processing stays on the local PC. No telemetry, model downloader, or automatic service discovery is included. The optional YouTube path makes a network request only through user-selected `yt-dlp` after explicit confirmation and start.
+- YouTube temporary media is stored under the selected output folder and removed after success, cancellation, or failure.
+- Third-party executables have their own behavior and policies; obtain them from trusted sources and review their documentation.
 - Temporary converted audio and temporary transcripts are removed after completion, cancellation, or failure.
 - Existing TXT/SRT files are not overwritten. Select a destination folder you trust and have write permission to.
 - Windows app does not request administrative privileges.
@@ -59,7 +67,7 @@ The workflow `.github/workflows/windows-qa.yml` runs unit tests on Windows and p
 
 - Guided, offline-friendly runtime/model setup and signed installer/MSIX.
 - Actual Japanese + English recognition quality benchmarks and low-spec Windows performance tests.
-- GUI subtitle editing, video preview, batch queue, accessibility checks at 1024x768.
+- GUI subtitle editing, video playback, batch queue, and broader accessibility testing.
 - Runtime checksums, SBOM, license audit for each bundled binary/model, signed MSIX QA.
 - Optional user-provided Ollama integration for transcript summaries with clear uncertainty labels.
 

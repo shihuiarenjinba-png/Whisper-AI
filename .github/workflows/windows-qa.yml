@@ -31,11 +31,16 @@ jobs:
         run: |
           pyinstaller --noconfirm --clean --onefile --windowed --name LocalSpeechStudio_QA_UNSIGNED app.py
           if (!(Test-Path dist/LocalSpeechStudio_QA_UNSIGNED.exe)) { throw 'EXE build not found' }
-          Get-FileHash dist/LocalSpeechStudio_QA_UNSIGNED.exe -Algorithm SHA256 | Format-List
+          New-Item -ItemType Directory -Force dist/qa-artifact | Out-Null
+          Copy-Item dist/LocalSpeechStudio_QA_UNSIGNED.exe dist/qa-artifact/
+          Copy-Item README.md,THIRD_PARTY_NOTICES.md dist/qa-artifact/
+          $hash = (Get-FileHash dist/qa-artifact/LocalSpeechStudio_QA_UNSIGNED.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash *LocalSpeechStudio_QA_UNSIGNED.exe" | Set-Content -Encoding ascii dist/qa-artifact/SHA256SUMS.txt
+          Get-Content dist/qa-artifact/SHA256SUMS.txt
       - name: Upload QA-only artifact
         uses: actions/upload-artifact@v4
         with:
           name: LocalSpeechStudio_QA_UNSIGNED_Windows_x64
-          path: dist/LocalSpeechStudio_QA_UNSIGNED.exe
+          path: dist/qa-artifact/
           if-no-files-found: error
           retention-days: 7

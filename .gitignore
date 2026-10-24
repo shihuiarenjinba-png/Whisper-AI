@@ -1,6 +1,9 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.qa-tools/
+.qa-evidence/
+.qa-temp/
 .venv/
 venv/
 build/
@@ -20,3 +23,4 @@ dist/
 *.srt
 *.bin
 !tests/**
+tests/**/__pycache__/

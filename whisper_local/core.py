@@ -26,6 +26,12 @@ class OperationCancelled(TranscriptionError):
     """The user cancelled the running process."""
 
 
+def is_english_only_model(model: Path) -> bool:
+    """Recognize common whisper.cpp names for English-only GGML models."""
+    name = model.name.lower()
+    return name.endswith(".en.bin") or ".en-" in name
+
+
 @dataclass(frozen=True)
 class TranscriptionJob:
     audio: Path
@@ -61,6 +67,11 @@ def validate(job: TranscriptionJob) -> tuple[str, str, Path, Path, Path]:
         raise TranscriptionError("whisper.cpp対応のGGMLモデル(.bin)を指定してください / Select a GGML .bin model")
     if job.language not in LANGUAGES:
         raise TranscriptionError("未対応の言語設定 / Unsupported language")
+    if job.language == "ja" and is_english_only_model(model):
+        raise TranscriptionError(
+            "日本語には多言語モデルを指定してください（.en.bin は英語専用です） / "
+            "Select a multilingual model for Japanese (.en.bin is English-only)"
+        )
     output = job.output_directory.expanduser().resolve()
     if not output.is_dir():
         raise TranscriptionError("保存先フォルダが見つかりません / Output directory not found")
@@ -76,7 +87,7 @@ def run_process(command: list[str], cancel: threading.Event, cwd: Path | None = 
     if cancel.is_set():
         raise OperationCancelled("キャンセルしました / Cancelled")
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
-    with tempfile.TemporaryFile(mode="w+t", encoding="utf-8") as log:
+    with tempfile.TemporaryFile(mode="w+t", encoding="utf-8", errors="replace") as log:
         try:
             proc = subprocess.Popen(
                 command, cwd=str(cwd) if cwd else None,

@@ -42,6 +42,19 @@ class CoreTests(unittest.TestCase):
         with self.assertRaisesRegex(TranscriptionError, "GGML"):
             validate(job)
 
+    def test_english_only_model_is_rejected_for_japanese(self):
+        for name in ("ggml-base.en.bin", "ggml-base.en-q5_1.bin"):
+            with self.subTest(name=name):
+                english_model = self.root / name
+                english_model.write_bytes(b"placeholder model")
+                job = TranscriptionJob(self.audio, english_model, str(self.cli), str(self.ffmpeg), self.out, "ja")
+                with self.assertRaisesRegex(TranscriptionError, "multilingual"):
+                    validate(job)
+
+        english_model = self.root / "ggml-base.en.bin"
+        english_job = TranscriptionJob(self.audio, english_model, str(self.cli), str(self.ffmpeg), self.out, "en")
+        self.assertEqual(validate(english_job)[3], english_model.resolve())
+
     def test_invalid_input(self):
         text_file = self.root / "note.txt"
         text_file.write_text("hello", encoding="utf-8")
