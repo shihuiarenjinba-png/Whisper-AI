@@ -1,0 +1,38 @@
+name: Windows QA (unsigned)
+on:
+  push:
+    branches:
+      - 'codex/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-build:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run unit tests
+        shell: pwsh
+        run: python -m unittest discover -s tests -v
+      - name: Install PyInstaller
+        shell: pwsh
+        run: python -m pip install 'pyinstaller>=6.10,<7'
+      - name: Build unsigned QA executable
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --clean --onefile --windowed --name LocalSpeechStudio_QA_UNSIGNED app.py
+          if (!(Test-Path dist/LocalSpeechStudio_QA_UNSIGNED.exe)) { throw 'EXE build not found' }
+          Get-FileHash dist/LocalSpeechStudio_QA_UNSIGNED.exe -Algorithm SHA256 | Format-List
+      - name: Upload QA-only artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LocalSpeechStudio_QA_UNSIGNED_Windows_x64
+          path: dist/LocalSpeechStudio_QA_UNSIGNED.exe
+          if-no-files-found: error
+          retention-days: 7
