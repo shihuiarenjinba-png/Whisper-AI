@@ -114,7 +114,7 @@ def next_output_base(output_dir: Path, stem: str) -> Path:
     for idx in range(1, 10000):
         filename = clean if idx == 1 else f"{clean}_{idx}"
         candidate = output_dir / filename
-        if not candidate.with_suffix(".txt").exists() and not candidate.with_suffix(".srt").exists():
+        if not Path(str(candidate) + ".txt").exists() and not Path(str(candidate) + ".srt").exists():
             return candidate
     raise TranscriptionError("出力ファイル名を作成できません / Too many existing outputs")
 
@@ -161,8 +161,8 @@ def transcribe(
         on_stage("saving")
         # Recheck for an unexpected file created during transcription.
         dest = next_output_base(output, audio.stem)
-        txt_target = dest.with_suffix(".txt")
-        srt_target = dest.with_suffix(".srt")
+        txt_target = Path(str(dest) + ".txt")
+        srt_target = Path(str(dest) + ".srt")
         txt_src.replace(txt_target)
         try:
             srt_src.replace(srt_target)
