@@ -8,6 +8,7 @@ Status: development / unsigned QA; commercial release and Store submission remai
 - Repository: `shihuiarenjinba-png/Whisper-AI`
 - Working branch: `codex/whisper-youtube-media-20261024`
 - Starting remote HEAD: `7eb9ce95cb24fecd90f01340e8e06a5e8ea33d6a`
+- Remote implementation commit: `1b5d6cd5f0386884040a4bdb9f91fb48878af6d5`
 - No changes were made to `main`, `release`, or the unrelated parent workspace repository.
 
 ## Windows test machine
@@ -106,6 +107,18 @@ A separately generated 60-second English WAV completed through the full applicat
 - Authenticode: `NotSigned`
 - A clean restart exposed a responding `Local Speech Studio — オフライン文字起こし` window and closed without a remaining parent/child process. PyInstaller one-file creates a launcher parent plus an application child; QA accounted for both.
 - This local build is QA-only. A final hash is recorded after the final source rebuild; the GitHub Actions artifact is the authoritative Windows/Python 3.12 build when available.
+
+## GitHub Actions Windows artifact
+
+- Run: https://github.com/shihuiarenjinba-png/Whisper-AI/actions/runs/40138091263
+- Trigger: push of `1b5d6cd5f0386884040a4bdb9f91fb48878af6d5`
+- Job `test-and-build`: SUCCESS. Checkout, Python 3.12 setup, unit tests, syntax check, PyInstaller installation, EXE build, and artifact upload all completed successfully.
+- Artifact: `LocalSpeechStudio_QA_UNSIGNED_Windows_x64` (artifact ID `12577887665`, expires 2026-10-31 unless retention changes)
+- Artifact ZIP: 11,180,086 bytes; SHA-256 `8123B6522DF0E9DADCE56B248B3606BB494D1B3BBF38324A81667726D522E830`, matching the GitHub artifact digest.
+- Actions EXE: 11,443,071 bytes; SHA-256 `A0A31513442E0ED422413AE820E79AC715C3F7494FE026A5A0F82E7BB973D3E2`, matching the artifact's `SHA256SUMS.txt`.
+- Artifact contents: EXE, README, `THIRD_PARTY_NOTICES.md`, and `SHA256SUMS.txt`.
+- Authenticode: `NotSigned`, as intended for QA.
+- Downloaded Actions EXE opened a responding Japanese app window on the Windows test machine and exited without a remaining launcher/application process.
 
 ## YouTube input
 
