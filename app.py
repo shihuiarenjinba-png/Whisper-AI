@@ -9,6 +9,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from whisper_local import OperationCancelled, TranscriptionError, TranscriptionJob, transcribe
+from dark_theme import AMBER, SOFT, apply_theme, header
 
 STRINGS = {
     "ja": {
@@ -35,13 +36,7 @@ STRINGS = {
 class TranscriberApp:
     def __init__(self, root: tk.Tk):
         self.root = root
-        # Legibility-first desktop sizing; native Windows control styling, no external UI framework.
-        from tkinter import font as tkfont
-        tkfont.nametofont("TkDefaultFont").configure(family="Segoe UI", size=11)
-        style = ttk.Style(root)
-        style.configure(".", font=("Segoe UI", 11))
-        style.configure("TButton", padding=(12, 7))
-        style.configure("TNotebook.Tab", padding=(16, 8))
+        apply_theme(root, accent=AMBER)
         self.locale = tk.StringVar(value="ja")
         self.audio = tk.StringVar()
         self.model = tk.StringVar()
@@ -64,17 +59,20 @@ class TranscriberApp:
 
     def _build(self) -> None:
         self.root.minsize(700, 470)
-        self.root.geometry("850x535")
-        container = ttk.Frame(self.root, padding=18)
-        container.pack(fill="both", expand=True)
-        top = ttk.Frame(container)
+        self.root.geometry("940x685")
+        self.hero_title, self.hero_subtitle = header(
+            self.root, "●  AUDIO / TRANSCRIPTION", "LOCAL SPEECH STUDIO",
+            "オフライン音声処理  /  TXT + SRT", right="NO CLOUD  •  PRIVATE")
+        container = ttk.Frame(self.root, style="Panel.TFrame", padding=17)
+        container.pack(fill="both", expand=True, padx=13, pady=(3, 13))
+        top = ttk.Frame(container, style="Panel.TFrame")
         top.pack(fill="x")
-        self.intro_label = ttk.Label(top, wraplength=690)
+        self.intro_label = ttk.Label(top, wraplength=710, style="PanelText.TLabel")
         self.intro_label.pack(side="left", fill="x", expand=True)
         ttk.Combobox(top, values=["ja", "en"], textvariable=self.locale, width=5, state="readonly").pack(side="right", padx=5)
         self.locale.trace_add("write", lambda *_: self._translate())
         ttk.Separator(container).pack(fill="x", pady=10)
-        grid = ttk.Frame(container)
+        grid = ttk.Frame(container, style="Panel.TFrame")
         grid.pack(fill="x")
         grid.columnconfigure(1, weight=1)
         for row, (key, variable, kind) in enumerate([
@@ -82,34 +80,35 @@ class TranscriberApp:
             ("cli", self.cli, "cli"), ("ffmpeg", self.ffmpeg, "ffmpeg"),
             ("output", self.output, "directory"),
         ]):
-            label = ttk.Label(grid, width=24)
+            label = ttk.Label(grid, width=24, style="PanelText.TLabel")
             label.grid(row=row, column=0, sticky="w", pady=7)
             self.labels[key] = label
             entry = ttk.Entry(grid, textvariable=variable)
             entry.grid(row=row, column=1, sticky="ew", padx=(4, 10), pady=7)
             self.entry_widgets.append(entry)
-            button = ttk.Button(grid, command=lambda v=variable, k=kind: self._browse(v, k))
+            button = ttk.Button(grid, command=lambda v=variable, k=kind: self._browse(v, k), style="Quiet.TButton")
             button.grid(row=row, column=2, sticky="ew", pady=7)
             self.browse_buttons.append(button)
-        row = ttk.Frame(container)
+        row = ttk.Frame(container, style="Panel.TFrame")
         row.pack(fill="x", pady=(12, 6))
-        self.language_label = ttk.Label(row)
+        self.language_label = ttk.Label(row, style="PanelText.TLabel")
         self.language_label.pack(side="left", padx=(0, 15))
         self.language_box = ttk.Combobox(row, textvariable=self.audio_language, values=["auto", "ja", "en"], state="readonly", width=12)
         self.language_box.pack(side="left")
-        self.start_button = ttk.Button(row, command=self._start)
+        self.start_button = ttk.Button(row, command=self._start, style="Primary.TButton")
         self.start_button.pack(side="right")
-        self.cancel_button = ttk.Button(row, command=self._cancel, state="disabled")
+        self.cancel_button = ttk.Button(row, command=self._cancel, state="disabled", style="Quiet.TButton")
         self.cancel_button.pack(side="right", padx=8)
         self.bar = ttk.Progressbar(container, mode="indeterminate")
         self.bar.pack(fill="x", pady=(16, 5))
-        ttk.Label(container, textvariable=self.status, wraplength=790).pack(anchor="w")
-        self.note_label = ttk.Label(container, wraplength=790, foreground="#555555")
+        ttk.Label(container, textvariable=self.status, wraplength=800, style="PanelText.TLabel").pack(anchor="w")
+        self.note_label = ttk.Label(container, wraplength=800, style="PanelText.TLabel")
         self.note_label.pack(anchor="w", pady=(10, 0))
 
     def _translate(self):
         d = STRINGS[self.locale.get()]
         self.root.title(d["title"])
+        self.hero_subtitle.configure(text=("オフライン音声処理  /  TXT + SRT" if self.locale.get() == "ja" else "Offline audio workstation  /  TXT + SRT"))
         self.intro_label.configure(text=d["intro"])
         for k, label in self.labels.items():
             label.configure(text=d[k])
