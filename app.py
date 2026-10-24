@@ -8,7 +8,10 @@ import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from whisper_local import OperationCancelled, TranscriptionError, TranscriptionJob, transcribe
+from whisper_local import (
+    OperationCancelled, TranscriptionError, TranscriptionJob, YouTubeJob,
+    transcribe, transcribe_youtube,
+)
 
 STRINGS = {
     "ja": {
@@ -19,6 +22,11 @@ STRINGS = {
         "saving": "保存しています…", "done": "完了しました。TXTとSRTを保存しました。", "cancelled": "キャンセルしました。",
         "error": "エラー", "success": "完了", "need_input": "音声・モデル・保存先を指定してください。", "note": "必要：whisper.cpp の whisper-cli、GGMLモデル、FFmpeg（それぞれ利用者が指定）。モデル同梱なし。",
         "closing": "処理停止中…", "auto": "自動判定", "jp": "日本語", "en": "英語",
+        "source": "入力方法", "local": "PC内の音声・動画", "youtube": "YouTube URL（許可のある動画のみ）",
+        "url": "YouTube動画URL", "ytdlp": "yt-dlp 実行ファイル", "downloading": "許可された動画から音声を取得しています…",
+        "rights": "自分に保存・文字起こしの権限があり、YouTubeの利用規約にも適合することを確認しました。",
+        "rights_needed": "YouTube動画を使用するための権限・利用条件を確認してください。",
+        "youtube_notice": "YouTube取得は任意機能です。動画の権利と利用規約に従ってください。yt-dlpは利用者が用意し、\n認証・DRM回避は行いません。リンクからの取得に失敗する場合は正規に入手したファイルを選択してください。",
     },
     "en": {
         "title": "Local Speech Studio — Offline Transcription", "intro": "Audio/video → transcript (TXT) and subtitles (SRT). Runs on your PC without external AI APIs.",
@@ -28,6 +36,11 @@ STRINGS = {
         "saving": "Saving…", "done": "Done. TXT and SRT have been saved.", "cancelled": "Cancelled.",
         "error": "Error", "success": "Complete", "need_input": "Select audio, model and output folder.", "note": "Required: whisper.cpp whisper-cli, GGML model and FFmpeg (user-provided). No model bundled.",
         "closing": "Stopping processing…", "auto": "Auto detect", "jp": "Japanese", "en": "English",
+        "source": "Input source", "local": "Local audio / video", "youtube": "YouTube URL (authorized only)",
+        "url": "YouTube video URL", "ytdlp": "yt-dlp executable", "downloading": "Obtaining audio from an authorized video…",
+        "rights": "I have the necessary rights to download/transcribe this video and comply with YouTube's terms.",
+        "rights_needed": "Confirm authorization and applicable YouTube terms first.",
+        "youtube_notice": "YouTube import is optional. You must follow copyright and YouTube terms. Supply yt-dlp yourself;\nno authentication or DRM bypass. If importing fails, use a legitimately obtained local media file.",
     },
 }
 
@@ -37,6 +50,10 @@ class TranscriberApp:
         self.root = root
         self.locale = tk.StringVar(value="ja")
         self.audio = tk.StringVar()
+        self.source_mode = tk.StringVar(value="file")
+        self.youtube_url = tk.StringVar()
+        self.ytdlp = tk.StringVar(value=shutil.which("yt-dlp") or "")
+        self.rights_confirmed = tk.BooleanVar(value=False)
         self.model = tk.StringVar()
         self.cli = tk.StringVar(value=shutil.which("whisper-cli") or "")
         self.ffmpeg = tk.StringVar(value=shutil.which("ffmpeg") or "")
@@ -49,6 +66,7 @@ class TranscriberApp:
         self.close_requested = False
         self.labels: dict[str, ttk.Label] = {}
         self.browse_buttons: list[ttk.Button] = []
+        self.source_buttons: list[ttk.Radiobutton] = []
         self.entry_widgets: list[ttk.Entry] = []
         self._build()
         self._translate()
@@ -56,8 +74,8 @@ class TranscriberApp:
         self.root.after(120, self._poll)
 
     def _build(self) -> None:
-        self.root.minsize(700, 470)
-        self.root.geometry("850x535")
+        self.root.minsize(720, 615)
+        self.root.geometry("900x690")
         container = ttk.Frame(self.root, padding=18)
         container.pack(fill="both", expand=True)
         top = ttk.Frame(container)
@@ -66,12 +84,24 @@ class TranscriberApp:
         self.intro_label.pack(side="left", fill="x", expand=True)
         ttk.Combobox(top, values=["ja", "en"], textvariable=self.locale, width=5, state="readonly").pack(side="right", padx=5)
         self.locale.trace_add("write", lambda *_: self._translate())
-        ttk.Separator(container).pack(fill="x", pady=10)
+        ttk.Separator(container).pack(fill="x", pady=8)
+        source_frame = ttk.Frame(container)
+        source_frame.pack(fill="x", pady=(0, 6))
+        self.source_label = ttk.Label(source_frame)
+        self.source_label.pack(side="left", padx=(0, 12))
+        self.source_local = ttk.Radiobutton(source_frame, variable=self.source_mode, value="file", command=self._refresh_source)
+        self.source_local.pack(side="left", padx=(0, 20))
+        self.source_youtube = ttk.Radiobutton(source_frame, variable=self.source_mode, value="youtube", command=self._refresh_source)
+        self.source_youtube.pack(side="left")
+        self.source_buttons = [self.source_local, self.source_youtube]
         grid = ttk.Frame(container)
         grid.pack(fill="x")
         grid.columnconfigure(1, weight=1)
         for row, (key, variable, kind) in enumerate([
-            ("input", self.audio, "audio"), ("model", self.model, "model"),
+            ("input", self.audio, "audio"),
+            ("url", self.youtube_url, "url"),
+            ("ytdlp", self.ytdlp, "cli"),
+            ("model", self.model, "model"),
             ("cli", self.cli, "cli"), ("ffmpeg", self.ffmpeg, "ffmpeg"),
             ("output", self.output, "directory"),
         ]):
@@ -81,9 +111,21 @@ class TranscriberApp:
             entry = ttk.Entry(grid, textvariable=variable)
             entry.grid(row=row, column=1, sticky="ew", padx=(4, 10), pady=7)
             self.entry_widgets.append(entry)
+            if key == "input": self.local_entry = entry
+            if key == "url": self.url_entry = entry
+            if key == "ytdlp": self.ytdlp_entry = entry
             button = ttk.Button(grid, command=lambda v=variable, k=kind: self._browse(v, k))
             button.grid(row=row, column=2, sticky="ew", pady=7)
             self.browse_buttons.append(button)
+            if key == "input": self.local_browse = button
+            if key == "url":
+                self.url_browse = button
+                button.configure(state="disabled")  # URLs must be entered, not browsed
+            if key == "ytdlp": self.ytdlp_browse = button
+        self.rights_box = ttk.Checkbutton(container, variable=self.rights_confirmed)
+        self.rights_box.pack(anchor="w", pady=(4, 0))
+        self.youtube_notice = ttk.Label(container, wraplength=825, foreground="#555555")
+        self.youtube_notice.pack(anchor="w", pady=(2, 0))
         row = ttk.Frame(container)
         row.pack(fill="x", pady=(12, 6))
         self.language_label = ttk.Label(row)
@@ -99,11 +141,17 @@ class TranscriberApp:
         ttk.Label(container, textvariable=self.status, wraplength=790).pack(anchor="w")
         self.note_label = ttk.Label(container, wraplength=790, foreground="#555555")
         self.note_label.pack(anchor="w", pady=(10, 0))
+        self._refresh_source()
 
     def _translate(self):
         d = STRINGS[self.locale.get()]
         self.root.title(d["title"])
         self.intro_label.configure(text=d["intro"])
+        self.source_label.configure(text=d["source"])
+        self.source_local.configure(text=d["local"])
+        self.source_youtube.configure(text=d["youtube"])
+        self.rights_box.configure(text=d["rights"])
+        self.youtube_notice.configure(text=d["youtube_notice"])
         for k, label in self.labels.items():
             label.configure(text=d[k])
         for b in self.browse_buttons:
@@ -127,25 +175,41 @@ class TranscriberApp:
         if result:
             variable.set(result)
 
+    def _refresh_source(self):
+        youtube = self.source_mode.get() == "youtube"
+        self.local_entry.configure(state="disabled" if youtube or self.running else "normal")
+        self.local_browse.configure(state="disabled" if youtube or self.running else "normal")
+        self.url_entry.configure(state="normal" if youtube and not self.running else "disabled")
+        self.ytdlp_entry.configure(state="normal" if youtube and not self.running else "disabled")
+        self.ytdlp_browse.configure(state="normal" if youtube and not self.running else "disabled")
+        self.rights_box.configure(state="normal" if youtube and not self.running else "disabled")
+
     def _start(self):
         if self.running:
             return
         d = STRINGS[self.locale.get()]
-        if not self.audio.get().strip() or not self.model.get().strip() or not self.output.get().strip():
+        youtube = self.source_mode.get() == "youtube"
+        if not self.model.get().strip() or not self.output.get().strip() or not (self.youtube_url.get().strip() if youtube else self.audio.get().strip()):
             messagebox.showerror(d["error"], d["need_input"])
             return
-        job = TranscriptionJob(
-            audio=Path(self.audio.get()), model=Path(self.model.get()),
-            whisper_cli=self.cli.get(), ffmpeg=self.ffmpeg.get(),
-            output_directory=Path(self.output.get()), language=self.audio_language.get(),
-        )
+        if youtube and not self.rights_confirmed.get():
+            messagebox.showerror(d["error"], d["rights_needed"])
+            return
+        common = dict(model=Path(self.model.get()), whisper_cli=self.cli.get(), ffmpeg=self.ffmpeg.get(),
+                      output_directory=Path(self.output.get()), language=self.audio_language.get())
+        if youtube:
+            job = YouTubeJob(url=self.youtube_url.get().strip(), yt_dlp=self.ytdlp.get(),
+                             permission_confirmed=True, **common)
+        else:
+            job = TranscriptionJob(audio=Path(self.audio.get()), **common)
         self.cancel = threading.Event()
         self._set_running(True)
         threading.Thread(target=self._worker, args=(job, self.cancel), daemon=True).start()
 
-    def _worker(self, job: TranscriptionJob, cancel: threading.Event):
+    def _worker(self, job: TranscriptionJob | YouTubeJob, cancel: threading.Event):
         try:
-            result = transcribe(job, cancel=cancel, on_stage=lambda stage: self.events.put(("stage", stage)))
+            worker = transcribe_youtube if isinstance(job, YouTubeJob) else transcribe
+            result = worker(job, cancel=cancel, on_stage=lambda stage: self.events.put(("stage", stage)))
             self.events.put(("success", result))
         except OperationCancelled:
             self.events.put(("cancelled", None))
@@ -163,6 +227,9 @@ class TranscriberApp:
             widget.configure(state="disabled" if running else "normal")
         for widget in self.browse_buttons:
             widget.configure(state="disabled" if running else "normal")
+        for widget in self.source_buttons:
+            widget.configure(state="disabled" if running else "normal")
+        self._refresh_source()
         if running:
             self.bar.start(12)
         else:
