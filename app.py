@@ -35,6 +35,13 @@ STRINGS = {
 class TranscriberApp:
     def __init__(self, root: tk.Tk):
         self.root = root
+        # Legibility-first desktop sizing; native Windows control styling, no external UI framework.
+        from tkinter import font as tkfont
+        tkfont.nametofont("TkDefaultFont").configure(family="Segoe UI", size=11)
+        style = ttk.Style(root)
+        style.configure(".", font=("Segoe UI", 11))
+        style.configure("TButton", padding=(12, 7))
+        style.configure("TNotebook.Tab", padding=(16, 8))
         self.locale = tk.StringVar(value="ja")
         self.audio = tk.StringVar()
         self.model = tk.StringVar()
