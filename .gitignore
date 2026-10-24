@@ -12,6 +12,11 @@ dist/
 *.m4a
 *.mp4
 *.mkv
+*.webm
+*.opus
+*.mov
+*.avi
+*.m4v
 *.srt
 *.bin
 !tests/**
