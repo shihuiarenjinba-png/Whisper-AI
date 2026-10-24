@@ -52,6 +52,9 @@ class CoreTests(unittest.TestCase):
         first.with_suffix(".srt").write_text("x")
         self.assertEqual(next_output_base(self.out, "recording").name, "recording_2")
         self.assertEqual(next_output_base(self.out, "bad:name").name, "bad_name")
+        dotted = next_output_base(self.out, "meeting.2026")
+        Path(str(dotted) + ".txt").write_text("previous")
+        self.assertEqual(next_output_base(self.out, "meeting.2026").name, "meeting.2026_2")
 
     def test_success_without_any_network_and_no_overwrite(self):
         stages = []
