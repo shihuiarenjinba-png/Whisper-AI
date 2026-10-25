@@ -65,6 +65,10 @@ The workflow `.github/workflows/windows-qa.yml` runs unit tests on Windows and p
 - Local preferences are stored under the user profile (`%LOCALAPPDATA%\\LocalSpeechStudio\\preferences.json` on Windows). They contain paths and language selections only; delete the file to reset the app.
 - Windows app does not request administrative privileges.
 
+## MSIX candidate path (Store identity HOLD)
+
+A guarded manual Windows workflow, `.github/workflows/windows-msix.yml`, can prepare an **unsigned MSIX QA candidate** from a PyInstaller onedir build **only after the actual Whisper-AI Partner Center identity is confirmed**. The verified identity file does not currently exist; MSIX packaging remains HOLD. See [MSIX readiness gates](docs/MSIX_READINESS.md). The candidate would not automatically bundle a Whisper model, FFmpeg or whisper.cpp, and needs license and Windows installation QA before any commercial release.
+
 ## Planned commercial-quality work (not implemented)
 
 - Guided, offline-friendly runtime/model setup and signed installer/MSIX.

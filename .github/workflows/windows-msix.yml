@@ -1,0 +1,65 @@
+name: Windows MSIX candidate (verified Store identity only)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  msix-candidate:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Identity gate - STOP if unknown
+        shell: pwsh
+        run: |
+          if (!(Test-Path config/verified_store_identity.json)) {
+            throw 'HOLD: No verified Store Identity for Whisper-AI. Do not use another products identity.'
+          }
+          python scripts/msix_prepare.py --identity-file config/verified_store_identity.json --validate-only
+          if ($LASTEXITCODE -ne 0) { throw 'HOLD: Store Identity validation failed.' }
+      - name: Run regression tests
+        shell: pwsh
+        run: python -m unittest discover -s tests -v
+      - name: Build one-directory Windows application
+        shell: pwsh
+        run: |
+          python -m pip install 'pyinstaller>=6.10,<7'
+          pyinstaller --noconfirm --clean --onedir --windowed --name LocalSpeechStudio app.py
+          if (!(Test-Path dist/LocalSpeechStudio/LocalSpeechStudio.exe)) { throw 'Missing application EXE' }
+      - name: Prepare manifest and pack unsigned MSIX
+        shell: pwsh
+        run: |
+          $stage = Join-Path $PWD 'dist/msix-layout'
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Copy-Item dist/LocalSpeechStudio (Join-Path $stage 'LocalSpeechStudio') -Recurse
+          Copy-Item README.md,THIRD_PARTY_NOTICES.md $stage
+          python scripts/msix_prepare.py --identity-file config/verified_store_identity.json --stage-dir $stage
+          if ($LASTEXITCODE -ne 0) { throw 'HOLD: manifest preparation failed' }
+          $kit = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits/10/bin'
+          $makeappx = Get-ChildItem -Path $kit -Filter makeappx.exe -Recurse -ErrorAction SilentlyContinue |
+            Where-Object { $_.DirectoryName -match '[\\/]x64$' } |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          if (!$makeappx) { throw 'Windows SDK MakeAppx.exe is not installed' }
+          $out = Join-Path $PWD 'dist/LocalSpeechStudio_STORE_CANDIDATE_QA_UNSIGNED.msix'
+          & $makeappx.FullName pack /d $stage /p $out /o
+          if ($LASTEXITCODE -ne 0 -or !(Test-Path $out)) { throw 'MakeAppx failed' }
+          New-Item -ItemType Directory -Force dist/msix-artifact | Out-Null
+          Copy-Item $out dist/msix-artifact/
+          $hash = (Get-FileHash $out -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash *LocalSpeechStudio_STORE_CANDIDATE_QA_UNSIGNED.msix" |
+            Set-Content -Encoding ascii dist/msix-artifact/SHA256SUMS.txt
+          Copy-Item README.md,THIRD_PARTY_NOTICES.md dist/msix-artifact/
+          Get-Content dist/msix-artifact/SHA256SUMS.txt
+      - name: Upload QA-only MSIX candidate (unsigned)
+        uses: actions/upload-artifact@v4
+        with:
+          name: LocalSpeechStudio_MSIX_STORE_CANDIDATE_QA_UNSIGNED
+          path: dist/msix-artifact/
+          if-no-files-found: error
+          retention-days: 7
