@@ -1,3 +1,47 @@
+> **2026-10-25 最新確認・引継ぎ追記（優先）**  
+> 以下の「2026-10-24原文」は当時の未検証状況を示す履歴です。最新状態として使わないでください。現行の完了・HOLD判定はこの追記と `docs/WINDOWS_QA_2026-10-25.md` を優先してください。
+>
+> **販売/Store認定提出は依然HOLD。GitHub Actionsが成功したのは未署名QA用EXEまでです。**
+
+## A. 2026-10-25 GitHub直接再確認済み
+
+- Repo: `shihuiarenjinba-png/Whisper-AI`（Public）、GitHub接続: `shihuiarenjinba-png`
+- **引継ぎ元HEAD（この追記前）**: `3c4e9f797eb19a3d5742f46169aeb2abc7833936`。直前の実装: `1b5d6cd5f0386884040a4bdb9f91fb48878af6d5`。
+- **作業対象**: `codex/whisper-youtube-media-20261024`。デフォルトブランチは `codex/offline-whisper-mvp-20261024` であり、作業対象と異なる。ブランチ名とHEADは作業開始時に再確認。
+- **Windows Actions**: https://github.com/shihuiarenjinba-png/Whisper-AI/actions/runs/40138293356 （source SHA `3c4e9f7…` / `test-and-build` SUCCESS）。Actions実ログで **19 tests OK**、Python構文チェック、Windows/Python 3.12のPyInstaller未署名EXE作成、artifactアップロードを確認。
+- **直近artifact**: `LocalSpeechStudio_QA_UNSIGNED_Windows_x64` / artifact ID `12577332520` / ZIP digest `SHA-256 D468A55D3884984F8923F2EE73CD1DE1C8C6BA6500810BE6D3B6A430939B31B9`（GitHub API/Actions実ログ一致）。GitHub記録で `expired=false`、有効期限 `2026-10-31T22:23:20Z`。期限切れなら同じHEADもしくは更新後のHEADでActionsを再実行し、その新artifactのSHAを検証。
+- **Actions EXE SHA-256**: `625494037EF9AEF6A9890CC9CB8F2674E265528AFFB434C5CBB2033BD5D76BF4` は前担当者の最終報告記録値。**本追記作成時にはZIP中EXEを独立に再ハッシュしていない**ため、配布判断時は実物から再計算すること。
+- `docs/screenshots/` に4枚のWindows GUI画像がGitHub上で存在することを確認: `windows-ja-1280x720-fit.png`、`windows-en-1024x768-fit.png`、`windows-en-youtube-scrollable.png`、`windows-en-youtube-scrolled.png`。実機目視完了との報告はQA記録にあるが、本追記でスクリーンショットの視認を再実施したものではない。
+- README、`THIRD_PARTY_NOTICES.md`、`.github/workflows/windows-qa.yml`、`app.py`、`whisper_local/core.py`、`whisper_local/media_url.py` とテストをGitHubから確認。日本語/英語UI、ローカル音声・動画、任意の権利確認済みYouTube URL、16kHz変換、TXT/SRT、キャンセル、モデル事前検証、ユーザー提供の外部ランタイムというMVP仕様に整合。
+
+### Windows実モデルQA（以前の担当者の測定記録を引継ぎ）
+
+`docs/WINDOWS_QA_2026-10-25.md` によると、Windows 11 Pro / Intel Core Ultra 7 265K / RAM約31.5GiB、whisper.cpp 1.9.4と多言語`ggml-base.bin`によって**模擬ではない**MP4→FFmpeg→whisper-cli→TXT/SRTが日英とも成功。アプリ全体の処理時間: 日本語1.276秒、英語1.314秒。Whisper CLI 3回の平均: 日本語1.170秒、英語1.067秒。平均マシンCPU: 日本語15.7–16.6%、英語15.0–15.7%。観測最大ワーキングセット: 日本語301.8MiB、英語303.4MiB。60秒英語音声3.956秒、キャンセル時残留ファイルなし。これは自作合成音声を使った限定結果であり、**一般音声の認識精度、WER/CER、低性能PC性能の証明ではない**。正答率を推定で付けない。
+
+### 依然HOLDの事項
+
+- 実際にYouTubeから動画を正規取得する**陽性ネットワーク試験**: 許諾およびYouTube利用条件を確認できる自作URLがないため未実施。現状はURL/権限判定とダウンロード模擬試験、正規自作MP4のローカル入力のみ。
+- Store Package/Identity、Publisher、PFN、Store Version: **未確認**。MSIX候補は**未生成**。これらの値を推測・他製品から流用しない。
+- コード署名、WACK、MSIX実機インストール/アンインストール、Partner Center登録・認定・公開、Stripe販売公開: **未実施**。
+- 商用配布対象（Python/Tcl-Tk/PyInstaller/whisper.cpp/FFmpeg/yt-dlp/モデル）の正確なバージョン・権利・ライセンス条文・SBOM・同梱条件は最終未確定。現行EXEがWhisperモデルやFFmpeg/whisper-cliを自動同梱するわけではない。
+- 実環境録音/雑音/長時間、低性能PC、GPU構成、アクセシビリティ、初回導入とエラー回復の追加評価は未完了。
+
+## B. 次のコード担当が実行する順番（済んだ試験のやり直しを目的にしない）
+
+1. 指定GitHubアカウントで対象ブランチの**その時点のリモートHEAD**、README、現行QA文書、ワークフロー、成果物の期限とSHAを再確認。別の作業ディレクトリの未コミット変更には触れない。`main`/`release`およびデフォルトMVPブランチへの直接変更は禁止。
+2. **まず商用導線のボトルネックを解消**: 初回に必要な `whisper-cli.exe`、GGMLモデル、`ffmpeg.exe` の導入/選択を初心者でも迷わない方式に改善。無断ダウンロードや無許諾バイナリの同梱は避け、同梱・ダウンロード案をそれぞれライセンス/供給元/チェックサムを確認して採否決定。外部AI API/従量課金を追加しない。
+3. **機能の回帰と商用耐久QA**: 日英実音声・雑音・長尺・低スペック・日本語ファイルパス・権限エラー・ディスク容量不足・キャンセル/再起動/再試行・既存出力を保護。YouTubeは権利/規約を満たす自作動画が用意できる場合だけ実取得試験を行い、無ければHOLDのままローカルMP4で進める。ネットワーク取得のサイズ/時間制限が未知メタデータや途中エラーでも十分かを見直す。
+4. **表示と商品品質**: 日本語/英語の全ダイアログとエラー、1024×768と1280×720、DPI倍率変更、縦スクロール、キーボード/アクセシビリティ、TXT/SRT出力を確認。既存スクリーンショットは素材として再利用し、変更後だけ撮り直す。
+5. **配布設計とOSS監査**: 正確な版数とライセンス本文/NOTICE/SBOM/出所/各SHAを台帳化。開発用`QA_UNSIGNED`表記を維持し、同梱しない依存がある場合は販売説明とインストール案内に明記。ローカル音声ファイルやログの外部送信はしない。
+6. 作業ブランチ内で修正→ユニットテスト→Windows Actions→EXE起動確認→artifact本体と`SHA256SUMS.txt`の再照合→SHA/スクリーンショットを報告。可能な工程は調査だけで終えない。
+7. MSIXは**対象アプリの実在Store Identity/Publisher/PFN/Versionを一次資料で確認できた場合のみ**候補生成。未知ならHOLDにし、Microsoft Store/Stripe公開へ進まない。
+
+## C. 最終報告の必須項目
+
+最新HEAD SHA、変更ファイル/コミット、テスト実数、Windows Actions Run URLと各ステップ、署名区分、artifact名/ID/期限、EXEとZIPの実測SHA-256、実モデルの言語別実測・文字起こし結果、画面画像、ライセンス配布判定、MSIX/Storeゲート、未完了項目、次の具体アクション。
+
+---
+
 # Whisper-AI — コード担当引継ぎ・実行指示
 作成: 2026-10-24 (Asia/Tokyo) / 状態: **開発・QA段階 / 販売・認定提出 HOLD**
 
