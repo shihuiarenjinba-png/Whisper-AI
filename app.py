@@ -14,6 +14,7 @@ from whisper_local import (
     transcribe, transcribe_youtube, validate_youtube_job,
 )
 from whisper_local.core import validate
+from whisper_local.preferences import load_preferences, save_preferences
 
 STRINGS = {
     "ja": {
@@ -33,7 +34,7 @@ STRINGS = {
         "setup_steps": "はじめに：入力 → 多言語モデル → whisper-cli → FFmpeg → 保存先の順に指定します。YouTube入力時だけyt-dlpが必要です。",
         "check": "設定を確認", "check_ok": "設定を確認しました。ネットワーク接続や文字起こしはまだ開始していません。",
         "help": "設定の説明", "help_title": "初回設定", "open_folder": "保存先を開く",
-        "help_text": "1. whisper.cppのwhisper-cli.exeを用意します。\n2. 日本語には .en.bin ではない多言語GGMLモデルを選びます。\n3. ffmpeg.exeを用意します。\n4. YouTube入力を使う場合だけyt-dlp.exeを用意します。\n\nこのアプリはモデルやツールを自動取得しません。配布元・ライセンス・SHA-256を確認してください。",
+        "help_text": "1. whisper.cppのwhisper-cli.exeを用意します。\n2. 日本語には .en.bin ではない多言語GGMLモデルを選びます。\n3. ffmpeg.exeを用意します。\n4. YouTube入力を使う場合だけyt-dlp.exeを用意します。\n\nこのアプリはモデルやツールを自動取得しません。配布元・ライセンス・SHA-256を確認してください。\n設定確認後にツールの場所をPC内に記録します。動画URLや権限のチェック状態は記録しません。",
         "missing": "次の必須項目を指定してください：{items}", "preview_empty": "文字起こし完了後、ここにTXTの内容を表示します。",
     },
     "en": {
@@ -53,7 +54,7 @@ STRINGS = {
         "setup_steps": "Start here: choose the input, multilingual model, whisper-cli, FFmpeg and output folder. yt-dlp is needed only for YouTube input.",
         "check": "Check setup", "check_ok": "Setup looks ready. No network access or transcription was started.",
         "help": "Setup help", "help_title": "First-time setup", "open_folder": "Open output folder",
-        "help_text": "1. Obtain whisper-cli.exe from whisper.cpp.\n2. For Japanese, choose a multilingual GGML model, not an .en.bin model.\n3. Obtain ffmpeg.exe.\n4. yt-dlp.exe is needed only for YouTube input.\n\nThe app does not download tools or models. Verify each source, license and SHA-256.",
+        "help_text": "1. Obtain whisper-cli.exe from whisper.cpp.\n2. For Japanese, choose a multilingual GGML model, not an .en.bin model.\n3. Obtain ffmpeg.exe.\n4. yt-dlp.exe is needed only for YouTube input.\n\nThe app does not download tools or models. Verify each source, license and SHA-256.\nSuccessful setup checks remember local tool paths, not video URLs or permission consent.",
         "missing": "Provide these required items: {items}", "preview_empty": "The TXT result will appear here after transcription.",
     },
 }
@@ -62,17 +63,18 @@ STRINGS = {
 class TranscriberApp:
     def __init__(self, root: tk.Tk):
         self.root = root
-        self.locale = tk.StringVar(value="ja")
+        prefs = load_preferences()
+        self.locale = tk.StringVar(value=prefs.get("locale", "ja"))
         self.audio = tk.StringVar()
         self.source_mode = tk.StringVar(value="file")
         self.youtube_url = tk.StringVar()
-        self.ytdlp = tk.StringVar(value=shutil.which("yt-dlp") or "")
+        self.ytdlp = tk.StringVar(value=prefs.get("ytdlp") or shutil.which("yt-dlp") or "")
         self.rights_confirmed = tk.BooleanVar(value=False)
-        self.model = tk.StringVar()
-        self.cli = tk.StringVar(value=shutil.which("whisper-cli") or "")
-        self.ffmpeg = tk.StringVar(value=shutil.which("ffmpeg") or "")
-        self.output = tk.StringVar(value=str(Path.home() / "Documents") if (Path.home() / "Documents").is_dir() else str(Path.home()))
-        self.audio_language = tk.StringVar(value="auto")
+        self.model = tk.StringVar(value=prefs.get("model", ""))
+        self.cli = tk.StringVar(value=prefs.get("cli") or shutil.which("whisper-cli") or "")
+        self.ffmpeg = tk.StringVar(value=prefs.get("ffmpeg") or shutil.which("ffmpeg") or "")
+        self.output = tk.StringVar(value=prefs.get("output") or (str(Path.home() / "Documents") if (Path.home() / "Documents").is_dir() else str(Path.home())))
+        self.audio_language = tk.StringVar(value=prefs.get("audio_language", "auto"))
         self.status = tk.StringVar()
         self.events: queue.Queue[tuple] = queue.Queue()
         self.cancel = threading.Event()
@@ -281,8 +283,18 @@ class TranscriberApp:
         except (TranscriptionError, OSError, ValueError) as exc:
             messagebox.showerror(d["error"], str(exc))
             return
+        self._remember_settings()
         self.status.set(d["check_ok"])
         messagebox.showinfo(d["success"], d["check_ok"])
+
+    def _remember_settings(self):
+        # Save only local tool paths and language; never remember media URLs or rights consent.
+        save_preferences({
+            "locale": self.locale.get(), "audio_language": self.audio_language.get(),
+            "model": self.model.get(), "cli": self.cli.get(),
+            "ffmpeg": self.ffmpeg.get(), "ytdlp": self.ytdlp.get(),
+            "output": self.output.get(),
+        })
 
     def _show_help(self):
         d = STRINGS[self.locale.get()]
@@ -350,6 +362,7 @@ class TranscriberApp:
                         return
                     if event == "success":
                         self.status.set(d["done"])
+                        self._remember_settings()
                         self.last_output_directory = Path(value[0]).parent
                         self.open_button.configure(state="normal")
                         self.preview_has_result = True

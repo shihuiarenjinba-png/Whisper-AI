@@ -134,6 +134,37 @@ class CoreTests(unittest.TestCase):
         finally:
             t.join()
 
+    def test_publish_does_not_clobber_file_created_during_save(self):
+        from whisper_local.core import publish_outputs
+        txt_src = self.root / "source.txt"
+        srt_src = self.root / "source.srt"
+        txt_src.write_text("new transcript", encoding="utf-8")
+        srt_src.write_text("new subtitles", encoding="utf-8")
+        from whisper_local.core import next_output_base as original_next
+        injected = False
+        def interleaved(directory, stem):
+            nonlocal injected
+            candidate = original_next(directory, stem)
+            if not injected:
+                injected = True
+                Path(str(candidate) + ".txt").write_text("keep original", encoding="utf-8")
+            return candidate
+        with patch("whisper_local.core.next_output_base", side_effect=interleaved):
+            txt, srt = publish_outputs(txt_src, srt_src, self.out, "recording")
+        self.assertEqual((self.out / "recording.txt").read_text(encoding="utf-8"), "keep original")
+        self.assertEqual(txt.name, "recording_2.txt")
+        self.assertEqual(srt.name, "recording_2.srt")
+        self.assertEqual(txt.read_text(encoding="utf-8"), "new transcript")
+
+    def test_publish_missing_source_cleans_up_new_targets(self):
+        from whisper_local.core import publish_outputs
+        txt_src = self.root / "source.txt"
+        txt_src.write_text("new transcript", encoding="utf-8")
+        with self.assertRaises(FileNotFoundError):
+            publish_outputs(txt_src, self.root / "missing.srt", self.out, "notes")
+        self.assertFalse((self.out / "notes.txt").exists())
+        self.assertFalse((self.out / "notes.srt").exists())
+
 
 if __name__ == "__main__":
     unittest.main()
