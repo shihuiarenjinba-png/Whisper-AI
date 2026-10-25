@@ -130,6 +130,43 @@ def next_output_base(output_dir: Path, stem: str) -> Path:
     raise TranscriptionError("出力ファイル名を作成できません / Too many existing outputs")
 
 
+def publish_outputs(txt_src: Path, srt_src: Path, output_dir: Path, stem: str) -> tuple[Path, Path]:
+    """Publish both results without ever replacing an existing user file.
+
+    Exclusive creation closes the check-then-rename race in the old implementation.
+    Cleanup removes only files this invocation successfully created.
+    """
+    for _attempt in range(10000):
+        dest = next_output_base(output_dir, stem)
+        txt_target = Path(str(dest) + ".txt")
+        srt_target = Path(str(dest) + ".srt")
+        txt_created = False
+        srt_created = False
+        try:
+            with txt_target.open("xb") as target:
+                txt_created = True
+                with txt_src.open("rb") as source:
+                    shutil.copyfileobj(source, target)
+            with srt_target.open("xb") as target:
+                srt_created = True
+                with srt_src.open("rb") as source:
+                    shutil.copyfileobj(source, target)
+            return txt_target, srt_target
+        except FileExistsError:
+            if txt_created:
+                txt_target.unlink(missing_ok=True)
+            if srt_created:
+                srt_target.unlink(missing_ok=True)
+            continue
+        except BaseException:
+            if txt_created:
+                txt_target.unlink(missing_ok=True)
+            if srt_created:
+                srt_target.unlink(missing_ok=True)
+            raise
+    raise TranscriptionError("保存先のファイル名を確保できません / Could not reserve unique output names")
+
+
 def transcribe(
     job: TranscriptionJob,
     cancel: threading.Event | None = None,
@@ -145,8 +182,7 @@ def transcribe(
     cli, ffmpeg, audio, model, output = validate(job)
     if cancel.is_set():
         raise OperationCancelled("キャンセルしました / Cancelled")
-    dest = next_output_base(output, audio.stem)
-    # Use the destination drive for temporary files; publishing is an atomic rename on the same drive.
+    # Work in the destination volume; finished results are written with exclusive creation.
     with tempfile.TemporaryDirectory(prefix="whisper_local_", dir=output) as tmp:
         tmp_path = Path(tmp)
         wav = tmp_path / "input.wav"
@@ -171,13 +207,4 @@ def transcribe(
             raise TranscriptionError("文字起こし出力が不足しています / TXT or SRT output missing")
         on_stage("saving")
         # Recheck for an unexpected file created during transcription.
-        dest = next_output_base(output, audio.stem)
-        txt_target = Path(str(dest) + ".txt")
-        srt_target = Path(str(dest) + ".srt")
-        txt_src.replace(txt_target)
-        try:
-            srt_src.replace(srt_target)
-        except OSError:
-            txt_target.unlink(missing_ok=True)
-            raise
-        return txt_target, srt_target
+        return publish_outputs(txt_src, srt_src, output, audio.stem)
