@@ -1,6 +1,11 @@
 name: Windows MSIX candidate (verified Store identity only)
 
 on:
+  push:
+    branches:
+      - 'codex/**'
+    paths:
+      - 'config/verified_store_identity.json'
   workflow_dispatch:
 
 permissions:

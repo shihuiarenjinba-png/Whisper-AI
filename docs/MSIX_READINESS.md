@@ -36,7 +36,7 @@ This is a **field-shape guide**, not an identity record. Never copy placeholders
 ## Build & gates
 
 1. Confirm verified Identity. Without the file, workflow intentionally fails before packaging.
-2. Manually dispatch `Windows MSIX candidate (verified Store identity only)` on this work branch.
+2. Commit the verified identity on a `codex/**` work branch. A push changing `config/verified_store_identity.json` triggers the MSIX candidate workflow automatically. Manual `workflow_dispatch` is also configured, but GitHub may hide manual dispatch until the workflow exists on the repository default branch; **do not alter the default branch to work around this**.
 3. Review tests and MakeAppx validation; compare MSIX artifact and SHA-256.
 4. The candidate remains `QA_UNSIGNED`. Unsigned MSIX cannot be installed as a trusted production package. Store submission signing is performed by Microsoft; external sideload testing requires a trusted matching signing certificate.
 5. Before sales: independently complete actual MSIX install/uninstall and upgrade tests, app launch/Windows GUI, 1024×768/1280×720, WACK, signed or Store submission path, license audit and model/runtime installation UX.

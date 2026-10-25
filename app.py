@@ -70,6 +70,9 @@ class TranscriberApp:
         self.youtube_url = tk.StringVar()
         self.ytdlp = tk.StringVar(value=prefs.get("ytdlp") or shutil.which("yt-dlp") or "")
         self.rights_confirmed = tk.BooleanVar(value=False)
+        # Never carry permission consent across a different URL or input mode.
+        self.youtube_url.trace_add('write', lambda *_: self.rights_confirmed.set(False))
+        self.source_mode.trace_add('write', lambda *_: self.rights_confirmed.set(False))
         self.model = tk.StringVar(value=prefs.get("model", ""))
         self.cli = tk.StringVar(value=prefs.get("cli") or shutil.which("whisper-cli") or "")
         self.ffmpeg = tk.StringVar(value=prefs.get("ffmpeg") or shutil.which("ffmpeg") or "")
